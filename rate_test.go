@@ -3,7 +3,6 @@ package github
 import (
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -47,22 +46,23 @@ func TestRateLimitedNeedsALimitAnswer(t *testing.T) {
 
 // Not parallel: the recorded rate is process-wide.
 func TestObserveRecordsTheQuota(t *testing.T) {
-	rec := func(status int, left string) *http.Response {
-		w := httptest.NewRecorder()
-		w.Header().Set("X-Ratelimit-Limit", "5000")
-		w.Header().Set("X-Ratelimit-Remaining", left)
-		w.Header().Set("X-Ratelimit-Reset", "1700000000")
-		w.WriteHeader(status)
-		return w.Result()
+	observe := func(status int, left string) error {
+		h := http.Header{}
+		h.Set("X-Ratelimit-Limit", "5000")
+		h.Set("X-Ratelimit-Remaining", left)
+		h.Set("X-Ratelimit-Reset", "1700000000")
+		resp := &http.Response{StatusCode: status, Header: h, Body: http.NoBody}
+		defer func() { _ = resp.Body.Close() }()
+		return Observe(resp)
 	}
-	if err := Observe(rec(http.StatusOK, "4321")); err != nil {
+	if err := observe(http.StatusOK, "4321"); err != nil {
 		t.Fatal(err)
 	}
 	if r := CurrentRate(); !r.Known || r.Limit != 5000 || r.Remaining != 4321 || !r.Reset.Equal(time.Unix(1700000000, 0)) {
 		t.Fatalf("rate after a 200 %+v", r)
 	}
 	var e *httpkit.RateLimitError
-	if err := Observe(rec(http.StatusForbidden, "0")); !errors.As(err, &e) {
+	if err := observe(http.StatusForbidden, "0"); !errors.As(err, &e) {
 		t.Fatalf("a 403 limit answer: %v", err)
 	}
 	if r := CurrentRate(); r.Remaining != 0 {
