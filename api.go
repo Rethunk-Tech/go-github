@@ -82,6 +82,9 @@ func (c *Client) now() time.Time {
 }
 
 func (c *Client) cache() *diskcache.Cache {
+	if c.CacheDir == "" {
+		return nil
+	}
 	return &diskcache.Cache{Dir: c.CacheDir, Now: c.now}
 }
 
@@ -140,6 +143,6 @@ func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (str
 		return "", err
 	}
 	notes := strings.TrimSpace(rel.Body)
-	diskcache.Put(c.cache(), name, notes)
+	_ = diskcache.Put(c.cache(), name, notes)
 	return notes, nil
 }
