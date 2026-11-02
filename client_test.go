@@ -1,7 +1,6 @@
 package github
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -45,19 +44,19 @@ func TestReleasesCacheAndStale(t *testing.T) {
 	})
 	now := time.Now().UTC()
 	c.Now = func() time.Time { return now }
-	if _, err := c.Releases(context.Background(), "o", "r"); err != nil {
+	if _, err := c.Releases(t.Context(), "o", "r"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Releases(context.Background(), "o", "r"); err != nil || hits.Load() != 1 {
+	if _, err := c.Releases(t.Context(), "o", "r"); err != nil || hits.Load() != 1 {
 		t.Fatalf("cache hit: hits = %d, err = %v", hits.Load(), err)
 	}
 	now = now.Add(2 * time.Hour)
 	fail = true
-	got, err := c.Releases(context.Background(), "o", "r")
+	got, err := c.Releases(t.Context(), "o", "r")
 	if err != nil || len(got) != 5 || hits.Load() != 2 {
 		t.Fatalf("stale fallback = %d releases, hits %d, err %v", len(got), hits.Load(), err)
 	}
-	_, err = (&Client{APIBase: c.APIBase, CacheDir: t.TempDir()}).Releases(context.Background(), "o", "r")
+	_, err = (&Client{APIBase: c.APIBase, CacheDir: t.TempDir()}).Releases(t.Context(), "o", "r")
 	var se *httpkit.StatusError
 	if !errors.As(err, &se) || se.Code != http.StatusInternalServerError {
 		t.Fatalf("no cache and a failing API must be a *httpkit.StatusError: %v", err)
@@ -70,7 +69,7 @@ func TestEmptyCacheDirFetchesEveryTime(t *testing.T) {
 	c := server(t, &hits, serve)
 	c.CacheDir = ""
 	for range 2 {
-		if _, err := c.Releases(context.Background(), "o", "r"); err != nil {
+		if _, err := c.Releases(t.Context(), "o", "r"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -89,7 +88,7 @@ func TestCachedReleasesNeverAsksAndOldFormatsAreFetchedAgain(t *testing.T) {
 	if _, _, ok := c.CachedReleases("o", "r"); ok {
 		t.Fatal("an empty cache answered")
 	}
-	if _, err := c.Releases(context.Background(), "o", "r"); err != nil {
+	if _, err := c.Releases(t.Context(), "o", "r"); err != nil {
 		t.Fatal(err)
 	}
 	got, whole, ok := c.CachedReleases("o", "r")
@@ -104,11 +103,11 @@ func TestCachedReleasesNeverAsksAndOldFormatsAreFetchedAgain(t *testing.T) {
 	if _, _, ok := c.CachedReleases("o", "r"); ok {
 		t.Fatal("an old format was read")
 	}
-	if got, err := c.Releases(context.Background(), "o", "r"); err != nil || len(got) != 5 || hits.Load() != 2 {
+	if got, err := c.Releases(t.Context(), "o", "r"); err != nil || len(got) != 5 || hits.Load() != 2 {
 		t.Fatalf("old format: %d releases, hits %d, err %v", len(got), hits.Load(), err)
 	}
 	c.Now = func() time.Time { return time.Now().UTC().Add(-24 * time.Hour) }
-	if _, err := c.Releases(context.Background(), "o", "r"); err != nil || hits.Load() != 3 {
+	if _, err := c.Releases(t.Context(), "o", "r"); err != nil || hits.Load() != 3 {
 		t.Fatalf("an answer stamped after a clock set back was served: hits %d, err %v", hits.Load(), err)
 	}
 }
@@ -132,7 +131,7 @@ func TestEarlierCacheShapesReadAsAbsent(t *testing.T) {
 	if _, _, ok := c.CachedReleases("o", "r"); ok {
 		t.Fatal("a release list without a value answered")
 	}
-	if got, err := c.Releases(context.Background(), "o", "r"); err != nil || len(got) != 5 || hits.Load() != 1 {
+	if got, err := c.Releases(t.Context(), "o", "r"); err != nil || len(got) != 5 || hits.Load() != 1 {
 		t.Fatalf("releases: %d, hits %d, err %v", len(got), hits.Load(), err)
 	}
 	if notes, ok := diskcache.Peek[string](c.cache(), Key("o", "r", "v2", "")+"-notes-v2.json"); ok {
@@ -151,7 +150,7 @@ func TestRateLimit(t *testing.T) {
 		w.Header().Set("X-Ratelimit-Reset", "1790000000")
 		http.Error(w, `{"message":"API rate limit exceeded"}`, http.StatusForbidden)
 	})
-	_, err := c.Releases(context.Background(), "o", "r")
+	_, err := c.Releases(t.Context(), "o", "r")
 	var rl *httpkit.RateLimitError
 	if !errors.As(err, &rl) || !rl.Reset.Equal(time.Unix(1790000000, 0)) {
 		t.Fatalf("err = %v", err)
@@ -160,7 +159,7 @@ func TestRateLimit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(c.CacheDir, releasesName("o", "r")), []byte(`{"fetched":"2025-01-01T00:00:00Z","value":[{"tag_name":"v0"}],"build":"1"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := c.Releases(context.Background(), "o", "r"); err != nil || len(got) != 1 {
+	if got, err := c.Releases(t.Context(), "o", "r"); err != nil || len(got) != 1 {
 		t.Fatalf("old format under a rate limit: %d releases, err %v", len(got), err)
 	}
 }
@@ -171,7 +170,7 @@ func TestBodyOverTheCapIsTooLarge(t *testing.T) {
 	c := server(t, &hits, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`["` + strings.Repeat("x", maxList) + `"]`))
 	})
-	if _, err := c.Releases(context.Background(), "o", "r"); !errors.Is(err, safefs.ErrTooLarge) {
+	if _, err := c.Releases(t.Context(), "o", "r"); !errors.Is(err, safefs.ErrTooLarge) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -188,11 +187,11 @@ func TestReleasesBetween(t *testing.T) {
  {"tag_name":"v2.0.0","body":"rewrite","published_at":"2026-01-01T00:00:00Z"},
  {"tag_name":"v1.0.0","body":"installed"}]`))
 	})
-	got, err := c.ReleasesBetween(context.Background(), "o", "r", "1.0.0", "2.1.0")
+	got, err := c.ReleasesBetween(t.Context(), "o", "r", "1.0.0", "2.1.0")
 	if err != nil || len(got) != 2 || got[0].Tag != "v2.1.0" || got[1].Tag != "v2.0.0" || got[0].Published != "2026-02-01T10:00:00Z" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
-	if got, err = c.ReleasesBetween(context.Background(), "o", "r", "1.0.0", ""); err != nil || len(got) != 3 {
+	if got, err = c.ReleasesBetween(t.Context(), "o", "r", "1.0.0", ""); err != nil || len(got) != 3 {
 		t.Fatalf("no latest bound: %+v, %v", got, err)
 	}
 }
@@ -211,12 +210,12 @@ func TestReleaseNotes(t *testing.T) {
 		_, _ = w.Write([]byte(`{"body":"  hi \n"}`))
 	})
 	fail = true
-	if _, err := c.ReleaseNotes(context.Background(), "o", "r", "v1"); err == nil {
+	if _, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err == nil {
 		t.Fatal("a failure was swallowed")
 	}
 	fail = false
 	for range 2 {
-		if notes, err := c.ReleaseNotes(context.Background(), "o", "r", "rel/1 x"); err != nil || notes != "hi" {
+		if notes, err := c.ReleaseNotes(t.Context(), "o", "r", "rel/1 x"); err != nil || notes != "hi" {
 			t.Fatalf("notes %q, %v", notes, err)
 		}
 	}
@@ -229,7 +228,7 @@ func TestInvalidInputsMakeNoRequest(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32
 	c := server(t, &hits, serve)
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, r := range [][2]string{{"me", ".."}, {"o", "r?x"}, {"o/r", "x"}, {"", ""}} {
 		if _, err := c.Releases(ctx, r[0], r[1]); !errors.Is(err, ErrInvalidRepo) {
 			t.Errorf("Releases(%q, %q): %v", r[0], r[1], err)
@@ -261,7 +260,7 @@ func TestReleaseNotesRecordsTheRate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := &Client{APIBase: srv.URL, CacheDir: t.TempDir()}
-	if _, err := c.ReleaseNotes(context.Background(), "o", "r", "v1"); err != nil {
+	if _, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil {
 		t.Fatal(err)
 	}
 	if r := CurrentRate(); !r.Known || r.Remaining != 4321 {
@@ -277,11 +276,11 @@ func TestReleaseCallsRefuseARedirectToPlainHTTP(t *testing.T) {
 		http.Redirect(w, r, plain.URL, http.StatusFound)
 	}))
 	t.Cleanup(secure.Close)
-	if _, err := FetchReleases(context.Background(), secure.Client(), secure.URL); err == nil || !strings.Contains(err.Error(), "refusing a redirect") {
+	if _, err := FetchReleases(t.Context(), secure.Client(), secure.URL); err == nil || !strings.Contains(err.Error(), "refusing a redirect") {
 		t.Fatalf("FetchReleases followed it: %v", err)
 	}
 	c := &Client{HTTP: secure.Client(), APIBase: secure.URL, CacheDir: t.TempDir()}
-	if _, err := c.ReleaseNotes(context.Background(), "o", "r", "v1"); err == nil || !strings.Contains(err.Error(), "refusing a redirect") {
+	if _, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err == nil || !strings.Contains(err.Error(), "refusing a redirect") {
 		t.Fatalf("ReleaseNotes followed it: %v", err)
 	}
 }
@@ -297,10 +296,10 @@ func TestRequestsReachTheCallersTransport(t *testing.T) {
 			seen.Add(1)
 		}
 	}}}
-	if _, err := c.Releases(context.Background(), "o", "r"); err != nil {
+	if _, err := c.Releases(t.Context(), "o", "r"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.ReleaseNotes(context.Background(), "o", "r", "v1"); err == nil {
+	if _, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err == nil {
 		t.Fatal("the fixture serves a list, not a release: decoding must fail")
 	}
 	if seen.Load() != 2 {

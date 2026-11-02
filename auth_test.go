@@ -11,7 +11,7 @@ const secret = "gho_testsecret123"
 
 func req(t *testing.T, url string) *http.Request {
 	t.Helper()
-	r, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	r, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

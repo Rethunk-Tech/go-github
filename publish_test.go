@@ -48,7 +48,7 @@ func TestPublishFlow(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := &Client{APIBase: srv.URL}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	rel, err := c.CreateRelease(ctx, "o", "r", NewRelease{Tag: "v1", Name: "One", Body: "notes", Draft: true})
 	if err != nil || rel.ID != 7 || rel.HTMLURL != "h" {
@@ -85,11 +85,11 @@ func TestPublishErrors(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := &Client{APIBase: srv.URL}
 
-	if _, err := c.CreateRelease(context.Background(), "o", "r", NewRelease{Tag: "v1"}); !errors.Is(err, ErrNoToken) {
+	if _, err := c.CreateRelease(t.Context(), "o", "r", NewRelease{Tag: "v1"}); !errors.Is(err, ErrNoToken) {
 		t.Fatalf("no login: %v", err)
 	}
 	withToken(t, "tok")
-	_, err := c.CreateRelease(context.Background(), "o", "r", NewRelease{Tag: "v1"})
+	_, err := c.CreateRelease(t.Context(), "o", "r", NewRelease{Tag: "v1"})
 	var se *httpkit.StatusError
 	if !errors.As(err, &se) || se.Code != 422 || err.Error() != "server answered 422 Unprocessable Entity: Validation Failed" {
 		t.Fatalf("422: %v", err)
@@ -106,7 +106,7 @@ func TestAuthOnlyToGitHub(t *testing.T) {
 		"https://evil.example/repos/o/r/releases":         "",
 		"https://api.github.com.evil.example/x":           "",
 	} {
-		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, url, nil)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, url, nil)
 		a.Apply(req)
 		if got := req.Header.Get("Authorization"); got != want {
 			t.Errorf("%s: Authorization = %q, want %q", url, got, want)
@@ -122,7 +122,7 @@ func TestNoAuthToTestServer(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	}))
 	t.Cleanup(srv.Close)
-	if _, err := (&Client{APIBase: srv.URL}).CreateRelease(context.Background(), "o", "r", NewRelease{Tag: "v1"}); err != nil || auth != "" {
+	if _, err := (&Client{APIBase: srv.URL}).CreateRelease(t.Context(), "o", "r", NewRelease{Tag: "v1"}); err != nil || auth != "" {
 		t.Fatalf("err %v, Authorization %q sent to a non-GitHub host", err, auth)
 	}
 }
