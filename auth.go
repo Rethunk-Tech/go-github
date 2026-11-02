@@ -63,7 +63,7 @@ func (a *Auth) LoggedIn(ctx context.Context) bool { return a.get(ctx) != "" }
 
 // IsGitHubHost reports whether host is one that a token may be sent to.
 func IsGitHubHost(host string) bool {
-	return host == "github.com" || host == "api.github.com"
+	return host == "github.com" || host == "api.github.com" || host == "uploads.github.com"
 }
 
 // Apply sets the bearer token on req when it targets GitHub itself over https and a token is available. A

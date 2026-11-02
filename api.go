@@ -25,7 +25,7 @@ const (
 
 // cacheFormat stamps the release cache and is bumped when Release gains a field an older file lacks: that file is
 // fetched again however young, still stands in when the lookup fails, and is never read for the missing field.
-const cacheFormat = 2
+const cacheFormat = 3
 
 // releasesPerPage is how many releases one lookup reads, the newest ones.
 const releasesPerPage = 30

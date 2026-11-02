@@ -28,6 +28,7 @@ A worked example and the contracts: [HUMANS.md](HUMANS.md).
 
 - Cached release lists (one hour, stale on failure) and release notes (kept forever).
 - `Select` a release by version and keep the assets you want; `Installable` drops source, checksum and other-OS builds.
+- `CreateRelease`, `UploadAsset` and `ReleaseByTag` publish a release and its assets with the gh login.
 - `Key` and `Shape` recognise one download across releases.
 - `ZipNames` reads a remote zip's file list with a few ranged requests.
 - `Observe` and `CurrentRate` track the quota; `RateLimited` names the wait.

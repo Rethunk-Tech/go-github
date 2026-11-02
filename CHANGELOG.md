@@ -6,6 +6,12 @@ Notable changes to `go-github`. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+
+### Added
+
+- `Client.CreateRelease`, `UploadAsset` and `ReleaseByTag` publish a release, attach a file to it and tell whether a tag is already released; `Release` gains `ID`, `HTMLURL` and `UploadURL`, so cached release lists are fetched again once.
+
 ## [0.1.1] - 2026-10-30
 
 ### Changed
@@ -23,6 +29,7 @@ Notable changes to `go-github`. The format follows
 - `Observe`, `RateLimited`, `CurrentRate` and `Rate` for GitHub's quota.
 - `Auth`, `DefaultAuth` and `GHCLI` for an opt-in `gh` login; `ValidRepo` and `ErrInvalidRepo` for names.
 
-[Unreleased]: https://github.com/Rethunk-Tech/go-github/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Rethunk-Tech/go-github/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Rethunk-Tech/go-github/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Rethunk-Tech/go-github/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Rethunk-Tech/go-github/releases/tag/v0.1.0

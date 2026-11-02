@@ -39,5 +39,6 @@ cannot resolve that check from PATH.
 | `pick.go` | `Installable`, `Shape` |
 | `zip.go` | `ZipNames` over ranged requests |
 | `rate.go` | `Rate`, `CurrentRate`, `RateLimited`, `Observe` |
+| `publish.go` | `NewRelease`, `CreateRelease`, `UploadAsset`, `ReleaseByTag`, `ErrNoToken` |
 | `auth.go` | `Auth`, `DefaultAuth`, `GHCLI`, `IsGitHubHost` |
 | `repo.go` | `ValidRepo`, `ErrInvalidRepo` |

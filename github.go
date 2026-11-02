@@ -12,6 +12,9 @@ import (
 
 // Release is one entry of a repository's releases list.
 type Release struct {
+	ID         int64   `json:"id,omitempty"`
+	HTMLURL    string  `json:"html_url,omitempty"`
+	UploadURL  string  `json:"upload_url,omitempty"`
 	Tag        string  `json:"tag_name"`
 	Draft      bool    `json:"draft"`
 	Prerelease bool    `json:"prerelease"`
