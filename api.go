@@ -33,15 +33,7 @@ const releasesPerPage = 30
 // getJSON reads one API answer into v. A limit answer is a *httpkit.RateLimitError, any other non-200 a
 // *httpkit.StatusError, a body over limit safefs.ErrTooLarge, and a transport failure the client's own error.
 func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v any) error {
-	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	DefaultAuth.Apply(req)
-	body, err := httpkit.DoCapped(httpkit.WithRedirect(cmp.Or(hc, http.DefaultClient), httpkit.NoDowngrade), req, limit, Observe)
+	body, err := getBody(ctx, hc, rawURL, "application/vnd.github+json", limit)
 	if err != nil {
 		return err
 	}
@@ -49,6 +41,19 @@ func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v
 		return fmt.Errorf("read GitHub's response: %w", err)
 	}
 	return nil
+}
+
+// getBody reads one API answer's body, asking for the media type accept.
+func getBody(ctx context.Context, hc *http.Client, rawURL, accept string, limit int64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", accept)
+	DefaultAuth.Apply(req)
+	return httpkit.DoCapped(httpkit.WithRedirect(cmp.Or(hc, http.DefaultClient), httpkit.NoDowngrade), req, limit, Observe)
 }
 
 // FetchReleases reads one releases list from url (any /repos/{o}/{r}/releases page). A limit answer is a
@@ -88,12 +93,14 @@ func (c *Client) cache() *diskcache.Cache {
 	return &diskcache.Cache{Dir: c.CacheDir, Now: c.now}
 }
 
+func (c *Client) apiBase() string { return cmp.Or(c.APIBase, apiBase) }
+
 // repoURL is the API URL of owner/repo, or ErrInvalidRepo before anything is spliced into it.
 func (c *Client) repoURL(owner, repo string) (string, error) {
 	if !ValidRepo(owner + "/" + repo) {
 		return "", fmt.Errorf("%w: %q", ErrInvalidRepo, owner+"/"+repo)
 	}
-	return cmp.Or(c.APIBase, apiBase) + "/repos/" + owner + "/" + repo, nil
+	return c.apiBase() + "/repos/" + owner + "/" + repo, nil
 }
 
 func releasesName(owner, repo string) string {

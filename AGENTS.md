@@ -41,4 +41,6 @@ cannot resolve that check from PATH.
 | `rate.go` | `Rate`, `CurrentRate`, `RateLimited`, `Observe` |
 | `publish.go` | `NewRelease`, `CreateRelease`, `UploadAsset`, `ReleaseByTag`, `ErrNoToken` |
 | `auth.go` | `Auth`, `DefaultAuth`, `GHCLI`, `IsGitHubHost` |
+| `info.go` | `Readme`, `Archived`, `LicenseText` |
+| `digest.go` | `Asset.VerifyDigest` |
 | `repo.go` | `ValidRepo`, `ErrInvalidRepo` |

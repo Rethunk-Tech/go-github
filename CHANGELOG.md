@@ -6,6 +6,10 @@ Notable changes to `go-github`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Client.Readme`, `Archived` and `LicenseText` read a repository's README, its archived flag and a license's text through the same auth, redirect and rate-limit handling as releases; `Asset.VerifyDigest` checks a downloaded file against GitHub's asset digest.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added
