@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -55,4 +56,19 @@ type counter struct {
 func (c counter) Write(b []byte) (int, error) {
 	*c.n += len(b)
 	return c.ResponseWriter.Write(b)
+}
+
+func TestZipNamesRefusesAnHTTPSDowngradeRedirect(t *testing.T) {
+	t.Parallel()
+	var plainHits atomic.Int32
+	plain := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { plainHits.Add(1) }))
+	t.Cleanup(plain.Close)
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL, http.StatusFound)
+	}))
+	t.Cleanup(secure.Close)
+	_, err := ZipNames(t.Context(), secure.Client(), Asset{Name: "a.zip", URL: secure.URL, Size: 1 << 20})
+	if err == nil || plainHits.Load() != 0 {
+		t.Fatalf("err = %v, plain hits = %d", err, plainHits.Load())
+	}
 }

@@ -6,6 +6,10 @@ Notable changes to `go-github`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `ZipNames` refuses a redirect from https to plain http, as the API reads do.
+
 ### Added
 
 - `Client.Readme`, `Archived` and `LicenseText` read a repository's README, its archived flag and a license's text through the same auth, redirect and rate-limit handling as releases; `Asset.VerifyDigest` checks a downloaded file against GitHub's asset digest.

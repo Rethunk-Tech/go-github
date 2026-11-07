@@ -20,7 +20,7 @@ Please do not open a public issue for a suspected vulnerability first.
   and must not panic the decoder (`FuzzFetchReleases`).
 - `Auth.Apply`: the token goes only to https `github.com` or `api.github.com`; a redirect to plain http is refused, and
   the token is never in an error.
-- `ZipNames`: a remote zip's directory is untrusted; only the central directory is read.
+- `ZipNames`: a remote zip's directory is untrusted; only the central directory is read, and a redirect from https to plain http is refused.
 - Cache files: a name that is not a local path under `CacheDir` is not read or written (go-safefs `diskcache`).
 
 ## What is out of scope

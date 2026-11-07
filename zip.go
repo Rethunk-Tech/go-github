@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/Rethunk-Tech/go-httpkit"
 	"github.com/Rethunk-Tech/go-httpkit/download"
 )
 
@@ -17,9 +18,7 @@ func ZipNames(ctx context.Context, hc *http.Client, a Asset) ([]string, error) {
 	if !strings.EqualFold(path.Ext(a.Name), ".zip") || a.Size <= 0 {
 		return nil, errors.New("not a zip")
 	}
-	if hc == nil {
-		hc = http.DefaultClient
-	}
+	hc = httpkit.WithRedirect(hc, httpkit.NoDowngrade)
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
 	zr, err := zip.NewReader(download.NewRangeReader(ctx, hc, a.URL, a.Size), a.Size)
