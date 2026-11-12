@@ -3,7 +3,6 @@ package github
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -125,7 +124,7 @@ func FuzzZipNames(f *testing.F) {
 			data = data[:64<<10]
 		}
 		hc := &http.Client{Transport: zipRT{data}}
-		_, _ = ZipNames(context.Background(), hc, Asset{Name: "x.zip", URL: "https://example.com/x.zip", Size: int64(len(data))})
+		_, _ = ZipNames(t.Context(), hc, Asset{Name: "x.zip", URL: "https://example.com/x.zip", Size: int64(len(data))})
 	})
 }
 
