@@ -19,9 +19,14 @@ func ZipNames(ctx context.Context, hc *http.Client, a Asset) ([]string, error) {
 		return nil, errors.New("not a zip")
 	}
 	hc = httpkit.WithRedirect(hc, httpkit.NoDowngrade)
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	c := *hc
+	c.Transport = applyAuth{c.Transport}
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
-	zr, err := zip.NewReader(download.NewRangeReader(ctx, hc, a.URL, a.Size), a.Size)
+	zr, err := zip.NewReader(download.NewRangeReader(ctx, &c, a.URL, a.Size), a.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -30,4 +35,16 @@ func ZipNames(ctx context.Context, hc *http.Client, a Asset) ([]string, error) {
 		names[i] = f.Name
 	}
 	return names, nil
+}
+
+type applyAuth struct{ http.RoundTripper }
+
+func (t applyAuth) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	DefaultAuth.Apply(req)
+	rt := t.RoundTripper
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	return rt.RoundTrip(req)
 }

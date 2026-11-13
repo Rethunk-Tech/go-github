@@ -3,8 +3,10 @@ package github
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -57,6 +59,54 @@ func (c counter) Write(b []byte) (int, error) {
 	*c.n += len(b)
 	return c.ResponseWriter.Write(b)
 }
+
+// Not parallel: DefaultAuth is process-wide.
+func TestZipNamesLendsTheToken(t *testing.T) {
+	prev := DefaultAuth
+	DefaultAuth = &Auth{Run: func(context.Context) ([]byte, error) { return []byte("secret"), nil }}
+	t.Cleanup(func() { DefaultAuth = prev })
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	if _, err := zw.Create("a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer secret" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeContent(w, r, "a.zip", time.Time{}, bytes.NewReader(buf.Bytes()))
+	}))
+	t.Cleanup(srv.Close)
+	inner := srv.Client()
+	hc := &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		u, err := url.Parse(srv.URL)
+		if err != nil {
+			return nil, err
+		}
+		req = req.Clone(req.Context())
+		req.URL.Scheme, req.URL.Host, req.Host = u.Scheme, u.Host, u.Host
+		return inner.Transport.RoundTrip(req)
+	})}
+
+	got, err := ZipNames(t.Context(), hc, Asset{
+		Name: "a.zip",
+		URL:  "https://github.com/o/r/releases/download/v1/a.zip",
+		Size: int64(buf.Len()),
+	})
+	if err != nil || !slices.Equal(got, []string{"a.txt"}) {
+		t.Fatalf("names %v %v", got, err)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestZipNamesRefusesAnHTTPSDowngradeRedirect(t *testing.T) {
 	t.Parallel()
