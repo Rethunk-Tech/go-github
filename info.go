@@ -22,7 +22,7 @@ func (c *Client) Readme(ctx context.Context, owner, repo string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	body, err := getBody(ctx, c.HTTP, base+"/readme", "application/vnd.github.raw", maxReadme)
+	body, _, err := getBody(ctx, c.HTTP, base+"/readme", "application/vnd.github.raw", maxReadme)
 	return string(body), err
 }
 

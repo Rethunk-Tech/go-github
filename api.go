@@ -27,13 +27,16 @@ const (
 // fetched again however young, still stands in when the lookup fails, and is never read for the missing field.
 const cacheFormat = 3
 
-// releasesPerPage is how many releases one lookup reads, the newest ones.
-const releasesPerPage = 30
+// releasesPerPage is one page of a lookup; maxReleasePages bounds how many pages follow each other.
+const (
+	releasesPerPage = 30
+	maxReleasePages = 10
+)
 
 // getJSON reads one API answer into v. A limit answer is a *httpkit.RateLimitError, any other non-200 a
 // *httpkit.StatusError, a body over limit safefs.ErrTooLarge, and a transport failure the client's own error.
 func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v any) error {
-	body, err := getBody(ctx, hc, rawURL, "application/vnd.github+json", limit)
+	body, _, err := getBody(ctx, hc, rawURL, "application/vnd.github+json", limit)
 	if err != nil {
 		return err
 	}
@@ -43,17 +46,40 @@ func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v
 	return nil
 }
 
-// getBody reads one API answer's body, asking for the media type accept.
-func getBody(ctx context.Context, hc *http.Client, rawURL, accept string, limit int64) ([]byte, error) {
+// getBody reads one API answer's body, asking for the media type accept, and returns the Link header it came with.
+func getBody(ctx context.Context, hc *http.Client, rawURL, accept string, limit int64) ([]byte, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	req.Header.Set("Accept", accept)
 	DefaultAuth.Apply(req)
-	return httpkit.DoCapped(httpkit.WithRedirect(cmp.Or(hc, http.DefaultClient), httpkit.NoDowngrade), req, limit, Observe)
+	var link string
+	body, err := httpkit.DoCapped(httpkit.WithRedirect(cmp.Or(hc, http.DefaultClient), httpkit.NoDowngrade), req, limit, func(resp *http.Response) error {
+		link = resp.Header.Get("Link")
+		return Observe(resp)
+	})
+	return body, link, err
+}
+
+// nextLink is the rel="next" target of a Link header, or "" when there is none.
+func nextLink(header string) string {
+	for part := range strings.SplitSeq(header, ",") {
+		target, params, ok := strings.Cut(part, ";")
+		if ok && strings.Contains(params, `rel="next"`) {
+			return strings.Trim(strings.TrimSpace(target), "<>")
+		}
+	}
+	return ""
+}
+
+// sameOrigin reports whether b is on a's scheme and host, so a Link header cannot send the token elsewhere.
+func sameOrigin(a, b string) bool {
+	ua, ea := url.Parse(a)
+	ub, eb := url.Parse(b)
+	return ea == nil && eb == nil && ua.Scheme == ub.Scheme && ua.Host == ub.Host
 }
 
 // FetchReleases reads one releases list from url (any /repos/{o}/{r}/releases page). A limit answer is a
@@ -112,10 +138,10 @@ func releasesName(owner, repo string) string {
 // format.
 func (c *Client) CachedReleases(owner, repo string) (releases []Release, all, ok bool) {
 	e, ok := diskcache.Peek[[]Release](c.cache(), releasesName(owner, repo))
-	return e.Value, len(e.Value) < releasesPerPage, ok && e.Stamp == strconv.Itoa(cacheFormat)
+	return e.Value, len(e.Value) < releasesPerPage*maxReleasePages, ok && e.Stamp == strconv.Itoa(cacheFormat)
 }
 
-// Releases lists owner/repo's newest releases, as GitHub orders them. An answer younger than an hour comes from the
+// Releases lists owner/repo's newest releases (up to 300, following GitHub's pagination), as GitHub orders them. An answer younger than an hour comes from the
 // cache and a stale one stands in when the lookup fails, rate limit included. An owner/repo that is not a GitHub name
 // is ErrInvalidRepo, with no request.
 func (c *Client) Releases(ctx context.Context, owner, repo string) ([]Release, error) {
@@ -124,7 +150,25 @@ func (c *Client) Releases(ctx context.Context, owner, repo string) ([]Release, e
 		return nil, err
 	}
 	return diskcache.CachedStamped(c.cache(), releasesName(owner, repo), strconv.Itoa(cacheFormat), cacheTTL, func() ([]Release, error) {
-		return FetchReleases(ctx, c.HTTP, base+"/releases?per_page="+strconv.Itoa(releasesPerPage))
+		var all []Release
+		next := base + "/releases?per_page=" + strconv.Itoa(releasesPerPage)
+		for range maxReleasePages {
+			body, link, err := getBody(ctx, c.HTTP, next, "application/vnd.github+json", maxList)
+			if err != nil {
+				return nil, err
+			}
+			var page []Release
+			if err := json.Unmarshal(body, &page); err != nil {
+				return nil, fmt.Errorf("read GitHub's response: %w", err)
+			}
+			all = append(all, page...)
+			follow := nextLink(link)
+			if follow == "" || !sameOrigin(base, follow) {
+				break
+			}
+			next = follow
+		}
+		return all, nil
 	})
 }
 

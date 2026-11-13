@@ -329,3 +329,22 @@ func TestRequestsReachTheCallersTransport(t *testing.T) {
 		t.Fatalf("OnResult saw %d answers", seen.Load())
 	}
 }
+
+func TestReleasesFollowsLinkPages(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	var base string
+	c := server(t, &hits, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = w.Write([]byte(`[{"tag_name":"v0.1"}]`))
+			return
+		}
+		w.Header().Set("Link", `<`+base+`/repos/o/r/releases?per_page=30&page=2>; rel="next", <x>; rel="last"`)
+		_, _ = w.Write([]byte(`[{"tag_name":"v9"}]`))
+	})
+	base = c.APIBase
+	got, err := c.Releases(t.Context(), "o", "r")
+	if err != nil || len(got) != 2 || got[1].Tag != "v0.1" || hits.Load() != 2 {
+		t.Fatalf("got %v, hits %d, err %v", got, hits.Load(), err)
+	}
+}
