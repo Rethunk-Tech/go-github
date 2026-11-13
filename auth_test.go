@@ -62,3 +62,21 @@ func TestAuthCachesTheAnswer(t *testing.T) {
 		t.Fatal("a failed Run counted as logged in")
 	}
 }
+
+func TestAuthDoesNotCacheACancelledLookup(t *testing.T) {
+	t.Parallel()
+	a := &Auth{Run: func(ctx context.Context) ([]byte, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return []byte(secret), nil
+	}}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if a.LoggedIn(ctx) {
+		t.Fatal("a cancelled lookup found a token")
+	}
+	if !a.LoggedIn(t.Context()) {
+		t.Fatal("one caller's cancelled request left every later request without a token")
+	}
+}

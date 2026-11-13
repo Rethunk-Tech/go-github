@@ -48,10 +48,14 @@ func (a *Auth) get(ctx context.Context) string {
 	if !a.fetched.IsZero() && time.Since(a.fetched) < tokenTTL {
 		return a.token
 	}
-	ctx, cancel := context.WithTimeout(ctx, tokenTimeout)
+	lookup, cancel := context.WithTimeout(ctx, tokenTimeout)
 	defer cancel()
-	out, err := a.Run(ctx)
-	a.token, a.fetched = "", time.Now()
+	out, err := a.Run(lookup)
+	a.token = ""
+	if ctx.Err() != nil {
+		return "" // The caller gave up; that says nothing about the login, so the next caller asks again.
+	}
+	a.fetched = time.Now()
 	if err == nil {
 		a.token = strings.TrimSpace(string(out))
 	}
