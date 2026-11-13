@@ -1,6 +1,8 @@
 package github
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -43,12 +45,12 @@ func noteRate(resp *http.Response) {
 }
 
 // RateLimited returns a *httpkit.RateLimitError when resp is GitHub's limit answer, else nil: a 403 or 429 with
-// Retry-After or X-Ratelimit-Remaining "0". Reset comes from Retry-After, else X-Ratelimit-Reset.
+// Retry-After, X-Ratelimit-Remaining "0" or a body naming the secondary rate limit. Reset comes from Retry-After, else X-Ratelimit-Reset.
 func RateLimited(resp *http.Response) error {
 	if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusTooManyRequests {
 		return nil
 	}
-	if resp.Header.Get("X-Ratelimit-Remaining") != "0" && resp.Header.Get("Retry-After") == "" {
+	if resp.Header.Get("X-Ratelimit-Remaining") != "0" && resp.Header.Get("Retry-After") == "" && !secondaryLimit(resp) {
 		return nil
 	}
 	e := &httpkit.RateLimitError{}
@@ -58,6 +60,20 @@ func RateLimited(resp *http.Response) error {
 		e.Reset = time.Unix(secs, 0)
 	}
 	return e
+}
+
+// secondaryLimit reports a 403 whose body names GitHub's secondary rate limit, which carries no quota headers. The
+// body is put back for the caller.
+func secondaryLimit(resp *http.Response) bool {
+	if resp.StatusCode != http.StatusForbidden || resp.Body == nil {
+		return false
+	}
+	head, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	resp.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(head), resp.Body), resp.Body}
+	return bytes.Contains(bytes.ToLower(head), []byte("secondary rate limit"))
 }
 
 // Observe records resp's quota for CurrentRate, then returns RateLimited(resp). It is one check function for any

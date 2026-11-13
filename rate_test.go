@@ -2,8 +2,10 @@ package github
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,5 +69,18 @@ func TestObserveRecordsTheQuota(t *testing.T) {
 	}
 	if r := CurrentRate(); r.Remaining != 0 {
 		t.Fatalf("rate after a 403 %+v", r)
+	}
+}
+
+func TestRateLimitedSecondaryLimitBody(t *testing.T) {
+	t.Parallel()
+	body := `{"message":"You have exceeded a secondary rate limit. Please wait."}`
+	resp := &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}
+	if err := RateLimited(resp); !errors.Is(err, httpkit.ErrRateLimited) {
+		t.Fatalf("secondary limit: %v", err)
+	}
+	other := &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"message":"Forbidden"}`))}
+	if err := RateLimited(other); err != nil {
+		t.Fatalf("plain 403: %v", err)
 	}
 }
