@@ -137,7 +137,7 @@ func TestEarlierCacheShapesReadAsAbsent(t *testing.T) {
 	if notes, ok := diskcache.Peek[string](c.cache(), Key("o", "r", "v2", "")+"-notes-v2.json"); ok {
 		t.Fatalf("notes without a value answered %q", notes.Value)
 	}
-	if notes, ok := diskcache.Peek[string](c.cache(), Key("o", "r", "v1", "")+"-notes-v2.json"); ok {
+	if notes, ok := diskcache.Peek[string](c.cache(), Key("o", "r", "v1", "")+"-notes.json"); ok {
 		t.Fatalf("an unversioned notes file answered %q", notes.Value)
 	}
 }
