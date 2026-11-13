@@ -224,6 +224,29 @@ func TestReleaseNotes(t *testing.T) {
 	}
 }
 
+func TestReleaseNotesDoesNotCacheADraft(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	draft := true
+	c := server(t, &hits, func(w http.ResponseWriter, _ *http.Request) {
+		if draft {
+			_, _ = w.Write([]byte(`{"body":"WIP","draft":true}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"body":"Highlights","draft":false}`))
+	})
+	if notes, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil || notes != "WIP" {
+		t.Fatalf("draft notes %q, %v", notes, err)
+	}
+	draft = false
+	if notes, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil || notes != "Highlights" {
+		t.Fatalf("published notes %q, %v", notes, err)
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("hits %d", hits.Load())
+	}
+}
+
 func TestInvalidInputsMakeNoRequest(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32

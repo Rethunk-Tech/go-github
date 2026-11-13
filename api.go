@@ -129,8 +129,9 @@ func (c *Client) Releases(ctx context.Context, owner, repo string) ([]Release, e
 }
 
 // ReleaseNotes returns the markdown body of owner/repo's release tagged tag. A published release never changes
-// its notes, so a cached answer is final and never refetched; a failed lookup is not cached. An invalid owner/repo
-// is ErrInvalidRepo, and a tag that is empty or would move the URL's path is ErrNoRelease, both with no request.
+// its notes, so a cached answer is final and never refetched; a draft or a failed lookup is not cached. An invalid
+// owner/repo is ErrInvalidRepo, and a tag that is empty or would move the URL's path is ErrNoRelease, both with no
+// request.
 func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (string, error) {
 	base, err := c.repoURL(owner, repo)
 	if err != nil {
@@ -144,12 +145,15 @@ func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (str
 		return notes.Value, nil
 	}
 	var rel struct {
-		Body string `json:"body"`
+		Body  string `json:"body"`
+		Draft bool   `json:"draft"`
 	}
 	if err := getJSON(ctx, c.HTTP, base+"/releases/tags/"+url.PathEscape(tag), maxNotes, &rel); err != nil {
 		return "", err
 	}
 	notes := strings.TrimSpace(rel.Body)
-	_ = diskcache.Put(c.cache(), name, notes)
+	if !rel.Draft {
+		_ = diskcache.Put(c.cache(), name, notes)
+	}
 	return notes, nil
 }
