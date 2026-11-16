@@ -129,7 +129,7 @@ func TestNoAuthToTestServer(t *testing.T) {
 
 // A caller who already gave up is told so, rather than being told it has no token.
 func TestPublishCancelledContext(t *testing.T) {
-	withToken(t, "tok")
+	withToken(t, "unused-token")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	c := &Client{}
@@ -144,7 +144,8 @@ func TestPublishCancelledContext(t *testing.T) {
 // A GitHub Enterprise install answers on the host its APIBase names, so publishing and reading there are
 // authenticated too; the token still goes nowhere else.
 func TestAuthToAPIBaseHost(t *testing.T) {
-	withToken(t, "tok")
+	const tok = "enterprise-token"
+	withToken(t, tok)
 	var seen []string
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.Header.Get("Authorization"))
@@ -170,7 +171,7 @@ func TestAuthToAPIBaseHost(t *testing.T) {
 		t.Fatalf("saw %d requests, want 3", len(seen))
 	}
 	for _, a := range seen {
-		if a != "Bearer tok" {
+		if a != "Bearer "+tok {
 			t.Fatalf("Authorization %q sent to the configured API host", a)
 		}
 	}
