@@ -39,7 +39,7 @@ func (c *Client) send(req *http.Request, v any) error {
 		return ErrNoToken
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	DefaultAuth.Apply(req)
+	DefaultAuth.apply(req, c.apiHost())
 	resp, err := httpkit.WithRedirect(cmp.Or(c.HTTP, http.DefaultClient), httpkit.NoDowngrade).Do(req)
 	if err != nil {
 		return err

@@ -35,8 +35,8 @@ const (
 
 // getJSON reads one API answer into v. A limit answer is a *httpkit.RateLimitError, any other non-200 a
 // *httpkit.StatusError, a body over limit safefs.ErrTooLarge, and a transport failure the client's own error.
-func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v any) error {
-	body, _, err := getBody(ctx, hc, rawURL, "application/vnd.github+json", limit)
+func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v any, apiHost string) error {
+	body, _, err := getBody(ctx, hc, rawURL, "application/vnd.github+json", limit, apiHost)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func getJSON(ctx context.Context, hc *http.Client, rawURL string, limit int64, v
 }
 
 // getBody reads one API answer's body, asking for the media type accept, and returns the Link header it came with.
-func getBody(ctx context.Context, hc *http.Client, rawURL, accept string, limit int64) ([]byte, string, error) {
+func getBody(ctx context.Context, hc *http.Client, rawURL, accept string, limit int64, apiHost string) ([]byte, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
@@ -55,7 +55,7 @@ func getBody(ctx context.Context, hc *http.Client, rawURL, accept string, limit 
 		return nil, "", err
 	}
 	req.Header.Set("Accept", accept)
-	DefaultAuth.Apply(req)
+	DefaultAuth.apply(req, apiHost)
 	var link string
 	body, err := httpkit.DoCapped(httpkit.WithRedirect(cmp.Or(hc, http.DefaultClient), httpkit.NoDowngrade), req, limit, func(resp *http.Response) error {
 		link = resp.Header.Get("Link")
@@ -87,7 +87,7 @@ func sameOrigin(a, b string) bool {
 // to plain http are refused.
 func FetchReleases(ctx context.Context, hc *http.Client, rawURL string) ([]Release, error) {
 	var all []Release
-	if err := getJSON(ctx, hc, rawURL, maxList, &all); err != nil {
+	if err := getJSON(ctx, hc, rawURL, maxList, &all, ""); err != nil {
 		return nil, err
 	}
 	return all, nil
@@ -121,6 +121,15 @@ func (c *Client) cache() *diskcache.Cache {
 
 func (c *Client) apiBase() string { return cmp.Or(c.APIBase, apiBase) }
 
+// apiHost is the host of apiBase when it is https and empty otherwise, so a token is never attached over http.
+func (c *Client) apiHost() string {
+	u, err := url.Parse(c.apiBase())
+	if err != nil || u.Scheme != "https" {
+		return ""
+	}
+	return u.Hostname()
+}
+
 // repoURL is the API URL of owner/repo, or ErrInvalidRepo before anything is spliced into it.
 func (c *Client) repoURL(owner, repo string) (string, error) {
 	if !ValidRepo(owner + "/" + repo) {
@@ -153,7 +162,7 @@ func (c *Client) Releases(ctx context.Context, owner, repo string) ([]Release, e
 		var all []Release
 		next := base + "/releases?per_page=" + strconv.Itoa(releasesPerPage)
 		for range maxReleasePages {
-			body, link, err := getBody(ctx, c.HTTP, next, "application/vnd.github+json", maxList)
+			body, link, err := getBody(ctx, c.HTTP, next, "application/vnd.github+json", maxList, c.apiHost())
 			if err != nil {
 				return nil, err
 			}
@@ -203,7 +212,7 @@ func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (str
 		Body  string `json:"body"`
 		Draft bool   `json:"draft"`
 	}
-	if err := getJSON(ctx, c.HTTP, base+"/releases/tags/"+url.PathEscape(tag), maxNotes, &rel); err != nil {
+	if err := getJSON(ctx, c.HTTP, base+"/releases/tags/"+url.PathEscape(tag), maxNotes, &rel, c.apiHost()); err != nil {
 		return "", err
 	}
 	notes := strings.TrimSpace(rel.Body)

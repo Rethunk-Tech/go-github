@@ -22,7 +22,7 @@ func (c *Client) Readme(ctx context.Context, owner, repo string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	body, _, err := getBody(ctx, c.HTTP, base+"/readme", "application/vnd.github.raw", maxReadme)
+	body, _, err := getBody(ctx, c.HTTP, base+"/readme", "application/vnd.github.raw", maxReadme, c.apiHost())
 	return string(body), err
 }
 
@@ -36,7 +36,7 @@ func (c *Client) Archived(ctx context.Context, owner, repo string) (bool, error)
 	var info struct {
 		Archived bool `json:"archived"`
 	}
-	if err := getJSON(ctx, c.HTTP, base, maxInfo, &info); err != nil {
+	if err := getJSON(ctx, c.HTTP, base, maxInfo, &info, c.apiHost()); err != nil {
 		return false, err
 	}
 	return info.Archived, nil
@@ -57,7 +57,7 @@ func (c *Client) LicenseText(ctx context.Context, key string) (string, error) {
 	var lic struct {
 		Body string `json:"body"`
 	}
-	if err := getJSON(ctx, c.HTTP, c.apiBase()+"/licenses/"+url.PathEscape(key), maxLicense, &lic); err != nil {
+	if err := getJSON(ctx, c.HTTP, c.apiBase()+"/licenses/"+url.PathEscape(key), maxLicense, &lic, c.apiHost()); err != nil {
 		return "", err
 	}
 	if lic.Body == "" {

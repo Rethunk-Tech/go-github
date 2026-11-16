@@ -126,3 +126,38 @@ func TestNoAuthToTestServer(t *testing.T) {
 		t.Fatalf("err %v, Authorization %q sent to a non-GitHub host", err, auth)
 	}
 }
+
+// A GitHub Enterprise install answers on the host its APIBase names, so publishing and reading there are
+// authenticated too; the token still goes nowhere else.
+func TestAuthToAPIBaseHost(t *testing.T) {
+	withToken(t, "tok")
+	var seen []string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		if r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/releases" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":1,"body":"notes"}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := &Client{HTTP: srv.Client(), APIBase: srv.URL}
+
+	if _, err := c.CreateRelease(t.Context(), "o", "r", NewRelease{Tag: "v1"}); err != nil {
+		t.Fatalf("CreateRelease: %v", err)
+	}
+	if _, _, err := c.ReleaseByTag(t.Context(), "o", "r", "v1"); err != nil {
+		t.Fatalf("ReleaseByTag: %v", err)
+	}
+	if _, err := c.Releases(t.Context(), "o", "r"); err != nil {
+		t.Fatalf("Releases: %v", err)
+	}
+	if len(seen) != 3 {
+		t.Fatalf("saw %d requests, want 3", len(seen))
+	}
+	for _, a := range seen {
+		if a != "Bearer tok" {
+			t.Fatalf("Authorization %q sent to the configured API host", a)
+		}
+	}
+}
