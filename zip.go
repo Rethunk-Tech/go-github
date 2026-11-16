@@ -13,15 +13,12 @@ import (
 )
 
 // ZipNames lists the entry names of a zip asset without downloading it, reading only its central directory through
-// a few ranged requests. Any other asset, or one of unknown size, is an error. hc nil means http.DefaultClient.
+// a few ranged requests. Any other asset, or one of unknown size, is an error. A nil hc uses the default client with DefaultTimeout.
 func ZipNames(ctx context.Context, hc *http.Client, a Asset) ([]string, error) {
 	if !strings.EqualFold(path.Ext(a.Name), ".zip") || a.Size <= 0 {
 		return nil, errors.New("not a zip")
 	}
 	hc = httpkit.WithRedirect(hc, httpkit.NoDowngrade)
-	if hc == nil {
-		hc = http.DefaultClient
-	}
 	c := *hc
 	c.Transport = applyAuth{c.Transport}
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
