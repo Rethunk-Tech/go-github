@@ -107,7 +107,7 @@ func (c *Client) ReleaseByTag(ctx context.Context, owner, repo, tag string) (rel
 	if err != nil {
 		return Release{}, false, err
 	}
-	if tag == "" || tag == "." || tag == ".." {
+	if tagMovesPath(tag) {
 		return Release{}, false, ErrNoRelease
 	}
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)

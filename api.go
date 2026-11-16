@@ -172,6 +172,17 @@ func (c *Client) Releases(ctx context.Context, owner, repo string) ([]Release, e
 	})
 }
 
+// tagMovesPath reports a tag that is empty or has a "/", ".", or ".." path element. PathEscape leaves those
+// intact, so "/releases/tags/"+tag would walk off that prefix.
+func tagMovesPath(tag string) bool {
+	for e := range strings.SplitSeq(tag, "/") {
+		if e == "" || e == "." || e == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 // ReleaseNotes returns the markdown body of owner/repo's release tagged tag. A published release never changes
 // its notes, so a cached answer is final and never refetched; a draft or a failed lookup is not cached. An invalid
 // owner/repo is ErrInvalidRepo, and a tag that is empty or would move the URL's path is ErrNoRelease, both with no
@@ -181,7 +192,7 @@ func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (str
 	if err != nil {
 		return "", err
 	}
-	if tag == "" || tag == "." || tag == ".." {
+	if tagMovesPath(tag) {
 		return "", ErrNoRelease
 	}
 	name := Key(owner, repo, tag, "") + "-notes-v2.json"
