@@ -127,6 +127,20 @@ func TestNoAuthToTestServer(t *testing.T) {
 	}
 }
 
+// A caller who already gave up is told so, rather than being told it has no token.
+func TestPublishCancelledContext(t *testing.T) {
+	withToken(t, "tok")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	c := &Client{}
+	if _, err := c.CreateRelease(ctx, "o", "r", NewRelease{Tag: "v1"}); !errors.Is(err, context.Canceled) || errors.Is(err, ErrNoToken) {
+		t.Fatalf("CreateRelease: %v", err)
+	}
+	if _, _, err := c.ReleaseByTag(ctx, "o", "r", "v1"); !errors.Is(err, context.Canceled) || errors.Is(err, ErrNoToken) {
+		t.Fatalf("ReleaseByTag: %v", err)
+	}
+}
+
 // A GitHub Enterprise install answers on the host its APIBase names, so publishing and reading there are
 // authenticated too; the token still goes nowhere else.
 func TestAuthToAPIBaseHost(t *testing.T) {

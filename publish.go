@@ -35,6 +35,10 @@ const maxReply = 1 << 20
 // that wraps *httpkit.StatusError and carries GitHub's message, so errors.Is(err, httpkit.ErrNotFound) holds for a
 // 404. The token goes only to https GitHub hosts (Auth.Apply), so a redirect or override elsewhere sends none.
 func (c *Client) send(req *http.Request, v any) error {
+	// A cancelled caller has no token to be told about: Auth.get answers "" for it, which would read as no login.
+	if err := req.Context().Err(); err != nil {
+		return err
+	}
 	if !DefaultAuth.LoggedIn(req.Context()) {
 		return ErrNoToken
 	}
