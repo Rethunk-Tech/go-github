@@ -9,7 +9,7 @@ import (
 
 var (
 	sourceAsset   = regexp.MustCompile(`(?i)(^|[^a-z])(src|sources?|source[ ._-]?code)([^a-z]|$)`)
-	checksumAsset = regexp.MustCompile(`(?i)(checksums?|sha(1|256|512)(sums?)?|md5(sums?)?)([^a-z]|$)`)
+	checksumAsset = regexp.MustCompile(`(?i)((checksums?|sha(1|256|512)sums?|md5sums?)([^a-z]|$)|\.(sha(1|256|512)|md5)(sums?)?$)`)
 	versionRun    = regexp.MustCompile(`v?\d+(?:[._]\d+)+|v\d+`)
 	nonWord       = regexp.MustCompile(`[^a-z]+`)
 )
