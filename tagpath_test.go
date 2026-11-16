@@ -1,7 +1,6 @@
 package github
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -18,14 +17,14 @@ func TestPathWalkingTag(t *testing.T) {
 
 	for _, tag := range []string{"../x", "foo/../../secret"} {
 		hits = 0
-		if _, err := c.ReleaseNotes(context.Background(), "owner", "repo", tag); !errors.Is(err, ErrNoRelease) {
+		if _, err := c.ReleaseNotes(t.Context(), "owner", "repo", tag); !errors.Is(err, ErrNoRelease) {
 			t.Fatalf("ReleaseNotes %q: err=%v", tag, err)
 		}
 		if hits != 0 {
 			t.Fatalf("ReleaseNotes %q: sent %d requests", tag, hits)
 		}
 		hits = 0
-		if _, _, err := c.ReleaseByTag(context.Background(), "owner", "repo", tag); !errors.Is(err, ErrNoRelease) {
+		if _, _, err := c.ReleaseByTag(t.Context(), "owner", "repo", tag); !errors.Is(err, ErrNoRelease) {
 			t.Fatalf("ReleaseByTag %q: err=%v", tag, err)
 		}
 		if hits != 0 {
@@ -41,7 +40,7 @@ func TestPathWalkingTag(t *testing.T) {
 	}))
 	t.Cleanup(srv2.Close)
 	c2 := &Client{HTTP: srv2.Client(), APIBase: srv2.URL}
-	notes, err := c2.ReleaseNotes(context.Background(), "owner", "repo", "release/1.0")
+	notes, err := c2.ReleaseNotes(t.Context(), "owner", "repo", "release/1.0")
 	if err != nil {
 		t.Fatalf("release/1.0: %v", err)
 	}
