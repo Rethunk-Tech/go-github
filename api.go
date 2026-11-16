@@ -18,6 +18,7 @@ import (
 const (
 	apiBase    = "https://api.github.com"
 	cacheTTL   = time.Hour
+	notesTTL   = 24 * time.Hour
 	apiTimeout = 8 * time.Second
 	maxList    = 8 << 20
 	maxNotes   = 1 << 20
@@ -192,8 +193,8 @@ func tagMovesPath(tag string) bool {
 	return false
 }
 
-// ReleaseNotes returns the markdown body of owner/repo's release tagged tag. A published release never changes
-// its notes, so a cached answer is final and never refetched; a draft or a failed lookup is not cached. An invalid
+// ReleaseNotes returns the markdown body of owner/repo's release tagged tag. Notes are refetched after 24 hours
+// because GitHub lets maintainers edit them; a draft or a failed lookup is not cached. An invalid
 // owner/repo is ErrInvalidRepo, and a tag that is empty or would move the URL's path is ErrNoRelease, both with no
 // request.
 func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (string, error) {
@@ -205,8 +206,12 @@ func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (str
 		return "", ErrNoRelease
 	}
 	name := Key(owner, repo, tag, "") + "-notes-v2.json"
-	if notes, ok := diskcache.Peek[string](c.cache(), name); ok {
-		return notes.Value, nil
+	stamp := strconv.Itoa(cacheFormat)
+	if e, ok := diskcache.Peek[string](c.cache(), name); ok && e.Stamp == stamp {
+		age := c.now().Sub(e.Fetched)
+		if age >= 0 && age < notesTTL {
+			return e.Value, nil
+		}
 	}
 	var rel struct {
 		Body  string `json:"body"`
@@ -217,7 +222,7 @@ func (c *Client) ReleaseNotes(ctx context.Context, owner, repo, tag string) (str
 	}
 	notes := strings.TrimSpace(rel.Body)
 	if !rel.Draft {
-		_ = diskcache.Put(c.cache(), name, notes)
+		_ = diskcache.PutEntry(c.cache(), name, diskcache.Entry[string]{Fetched: c.now(), Value: notes, Stamp: stamp})
 	}
 	return notes, nil
 }

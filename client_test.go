@@ -224,6 +224,57 @@ func TestReleaseNotes(t *testing.T) {
 	}
 }
 
+func TestReleaseNotesServesAFreshCache(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	c := server(t, &hits, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"body":"hi"}`))
+	})
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	c.Now = func() time.Time { return now }
+	for range 2 {
+		if notes, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil || notes != "hi" {
+			t.Fatalf("notes %q, %v", notes, err)
+		}
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("hits %d", hits.Load())
+	}
+}
+
+func TestReleaseNotesRefetchesAfterTTL(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	c := server(t, &hits, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"body":"hi"}`))
+	})
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	c.Now = func() time.Time { return now }
+	if _, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(notesTTL)
+	if notes, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil || notes != "hi" || hits.Load() != 2 {
+		t.Fatalf("hits %d, notes %q, %v", hits.Load(), notes, err)
+	}
+}
+
+func TestReleaseNotesRefetchesAWrongStamp(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	c := server(t, &hits, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"body":"hi"}`))
+	})
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	c.Now = func() time.Time { return now }
+	if err := os.WriteFile(filepath.Join(c.CacheDir, Key("o", "r", "v1", "")+"-notes-v2.json"), []byte(`{"fetched":"`+now.Format(time.RFC3339)+`","value":"old","build":"1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if notes, err := c.ReleaseNotes(t.Context(), "o", "r", "v1"); err != nil || notes != "hi" || hits.Load() != 1 {
+		t.Fatalf("hits %d, notes %q, %v", hits.Load(), notes, err)
+	}
+}
+
 func TestReleaseNotesDoesNotCacheADraft(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32
