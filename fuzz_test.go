@@ -433,10 +433,6 @@ func FuzzSelect(f *testing.F) {
 }
 
 func FuzzVerifyDigest(f *testing.F) {
-	p := filepath.Join(f.TempDir(), "f")
-	if err := os.WriteFile(p, []byte("data"), 0o600); err != nil {
-		f.Fatal(err)
-	}
 	sum := sha256.Sum256([]byte("data"))
 	good := "sha256:" + hex.EncodeToString(sum[:])
 	f.Add(good)
@@ -444,9 +440,14 @@ func FuzzVerifyDigest(f *testing.F) {
 	f.Add("md5:00")
 	f.Add("sha256:00")
 	f.Add("SHA256:" + hex.EncodeToString(sum[:]))
+	f.Add("shA256:")
 	f.Fuzz(func(t *testing.T, digest string) {
 		if len(digest) > 1024 {
 			digest = digest[:1024]
+		}
+		p := filepath.Join(t.TempDir(), "f")
+		if err := os.WriteFile(p, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
 		}
 		err := (Asset{Digest: digest}).VerifyDigest(p)
 		if err != nil && !errors.Is(err, ErrDigestMismatch) {
