@@ -60,6 +60,12 @@ func TestPublishFlow(t *testing.T) {
 	if _, ok := created["target_commitish"]; ok {
 		t.Fatal("target_commitish sent while unset")
 	}
+	if _, err := c.CreateRelease(ctx, "o", "r", NewRelease{Tag: "v1", Target: "abc"}); err != nil {
+		t.Fatal(err)
+	}
+	if created["target_commitish"] != "abc" {
+		t.Fatalf("target_commitish = %v", created["target_commitish"])
+	}
 
 	path := filepath.Join(t.TempDir(), "m.zip")
 	if err := os.WriteFile(path, []byte("zipdata"), 0o600); err != nil {
@@ -175,4 +181,115 @@ func TestAuthToAPIBaseHost(t *testing.T) {
 			t.Fatalf("Authorization %q sent to the configured API host", a)
 		}
 	}
+}
+
+func TestPublishInvalidInputsMakeNoRequest(t *testing.T) {
+	t.Parallel()
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		hits++
+	}))
+	t.Cleanup(srv.Close)
+	c := &Client{APIBase: srv.URL}
+	ctx := t.Context()
+
+	if _, err := c.CreateRelease(ctx, "o/..", "r", NewRelease{Tag: "v1"}); !errors.Is(err, ErrInvalidRepo) {
+		t.Fatalf("CreateRelease bad repo: %v", err)
+	}
+	if _, _, err := c.ReleaseByTag(ctx, "o/..", "r", "v1"); !errors.Is(err, ErrInvalidRepo) {
+		t.Fatalf("ReleaseByTag bad repo: %v", err)
+	}
+	if _, err := c.UploadAsset(ctx, Release{Tag: "v1"}, "x", ""); err == nil {
+		t.Fatal("empty upload URL succeeded")
+	}
+	missing := filepath.Join(t.TempDir(), "gone.bin")
+	if _, err := c.UploadAsset(ctx, Release{UploadURL: srv.URL + "/up"}, missing, ""); err == nil {
+		t.Fatal("missing file succeeded")
+	}
+	if hits != 0 {
+		t.Fatalf("%d requests", hits)
+	}
+}
+
+func TestPublishSurfacesTransportAndAnswerFaults(t *testing.T) {
+	withToken(t, "tok")
+	ctx := t.Context()
+
+	dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+	if _, err := (&Client{APIBase: deadURL}).CreateRelease(ctx, "o", "r", NewRelease{Tag: "v1"}); err == nil {
+		t.Fatal("closed server succeeded")
+	}
+
+	limit := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Ratelimit-Remaining", "0")
+		w.Header().Set("X-Ratelimit-Reset", "1")
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	t.Cleanup(limit.Close)
+	if _, err := (&Client{APIBase: limit.URL}).CreateRelease(ctx, "o", "r", NewRelease{Tag: "v1"}); !errors.Is(err, httpkit.ErrRateLimited) {
+		t.Fatalf("rate limit: %v", err)
+	}
+
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(plain.Close)
+	err := mustCreate(t, plain.URL)
+	var se *httpkit.StatusError
+	if !errors.As(err, &se) || se.Code != http.StatusBadRequest || err.Error() != "server answered 400 Bad Request" {
+		t.Fatalf("empty message: %v", err)
+	}
+
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{`))
+	}))
+	t.Cleanup(broken.Close)
+	var syn *json.SyntaxError
+	if err := mustCreate(t, broken.URL); !errors.As(err, &syn) {
+		t.Fatalf("truncated JSON: %v", err)
+	}
+
+	cut := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		conn, rw, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = rw.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{")
+		_ = rw.Flush()
+	}))
+	t.Cleanup(cut.Close)
+	if err := mustCreate(t, cut.URL); err == nil {
+		t.Fatal("short body succeeded")
+	}
+
+	if _, err := (&Client{APIBase: "http://["}).CreateRelease(ctx, "o", "r", NewRelease{Tag: "v1"}); err == nil {
+		t.Fatal("invalid API URL succeeded")
+	}
+	if _, _, err := (&Client{APIBase: "http://["}).ReleaseByTag(ctx, "o", "r", "v1"); err == nil {
+		t.Fatal("ReleaseByTag invalid API URL succeeded")
+	}
+
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"message":"Validation Failed"}`, http.StatusUnprocessableEntity)
+	}))
+	t.Cleanup(up.Close)
+	path := filepath.Join(t.TempDir(), "a.bin")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = (&Client{APIBase: up.URL}).UploadAsset(ctx, Release{UploadURL: up.URL + "/assets"}, path, "")
+	if !errors.As(err, &se) || se.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("rejected upload: %v", err)
+	}
+}
+
+func mustCreate(t *testing.T, base string) error {
+	t.Helper()
+	_, err := (&Client{APIBase: base}).CreateRelease(t.Context(), "o", "r", NewRelease{Tag: "v1"})
+	return err
 }

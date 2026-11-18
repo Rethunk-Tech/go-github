@@ -70,3 +70,12 @@ func TestVerifyDigest(t *testing.T) {
 		}
 	}
 }
+
+func TestASha256DigestOnAnUnreadableFileIsTheHashError(t *testing.T) {
+	t.Parallel()
+	missing := filepath.Join(t.TempDir(), "gone")
+	err := (Asset{Digest: "sha256:" + hex.EncodeToString(make([]byte, 32))}).VerifyDigest(missing)
+	if err == nil || errors.Is(err, ErrDigestMismatch) {
+		t.Fatalf("unreadable file: %v", err)
+	}
+}
