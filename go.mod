@@ -11,10 +11,10 @@ tool (
 )
 
 require (
-	github.com/Rethunk-Tech/go-desktopenv v0.9.2
-	github.com/Rethunk-Tech/go-httpkit v0.3.1
-	github.com/Rethunk-Tech/go-safefs v0.9.1
-	github.com/Rethunk-Tech/go-semverish v0.3.0
+	github.com/Rethunk-Tech/go-desktopenv v0.9.3
+	github.com/Rethunk-Tech/go-httpkit v0.3.2
+	github.com/Rethunk-Tech/go-safefs v0.10.0
+	github.com/Rethunk-Tech/go-semverish v0.3.1
 )
 
 require (
