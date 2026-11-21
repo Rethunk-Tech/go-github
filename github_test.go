@@ -47,6 +47,10 @@ func TestSelect(t *testing.T) {
 	if r, _, err = Select(all, "V3.0.0-beta", false, nil); err != nil || r.Tag != "v3.0.0-beta" {
 		t.Fatalf("a named prerelease = %q %v", r.Tag, err)
 	}
+	named := []Release{{Tag: "nightly", Assets: []Asset{{Name: "a.zip"}}}, {Tag: "r23", Assets: []Asset{{Name: "b.zip"}}}}
+	if r, _, err = Select(named, "r23", false, nil); err != nil || r.Tag != "r23" {
+		t.Fatalf("a non-version tag = %q %v", r.Tag, err)
+	}
 	if _, _, err = Select(all, "2.9.0", false, nil); !errors.Is(err, ErrNoRelease) {
 		t.Fatalf("a draft was picked: %v", err)
 	}

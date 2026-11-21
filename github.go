@@ -65,7 +65,7 @@ func Select(all []Release, version string, prerelease bool, keep func(Asset) boo
 			continue
 		}
 		if version != "" {
-			if c, ok := semverish.Compare(r.Tag, version); !ok || c != 0 {
+			if !semverish.Equal(r.Tag, version) {
 				continue
 			}
 		}
