@@ -6,6 +6,14 @@ Notable changes to `go-github`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The token is sent to a configured GitHub Enterprise API host, and `ZipNames` never lends it.
+- Releases follow `Link` pages, so older tags are found, and a secondary rate limit 403 is detected.
+- A cancelled request no longer hides the token for five minutes, and `Publish` returns the caller's context error instead of `ErrNoToken`.
+- `ReleaseNotes` no longer caches draft notes as final, and the notes cache is stamped and expires after 24 hours.
+- Tags that walk the release URL path are rejected, and archives whose names contain hash words are kept.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added
